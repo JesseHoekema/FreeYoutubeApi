@@ -1,3 +1,5 @@
+// api/ytSearch.js
+
 const ytSearch = require('yt-search');
 
 module.exports = async (req, res) => {
@@ -12,14 +14,14 @@ module.exports = async (req, res) => {
     // Perform the search using yt-search
     const result = await ytSearch(query);
     
-    // Extracting the first "maxResults" items
+    // Extract the first "maxResults" items
     const videos = result.videos.slice(0, maxResults).map(item => ({
       title: item.title,
       videoId: item.videoId,
       creator: item.author.name,
     }));
 
-    return res.json(videos);
+    return res.status(200).json(videos);
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: 'Failed to fetch YouTube data' });
