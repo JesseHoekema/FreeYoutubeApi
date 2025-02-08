@@ -12,7 +12,7 @@ module.exports = async (req, res) => {
     // Perform the search using yt-search
     const result = await ytSearch(query);
     
-    // Extracting the first "maxResults" items and additional channel info
+    // Extracting the first "maxResults" items directly
     const videos = result.videos.slice(0, maxResults).map(item => ({
       title: item.title,
       videoId: item.videoId,
@@ -25,8 +25,8 @@ module.exports = async (req, res) => {
       duration: item.timestamp,  // Duration of the video (in seconds)
     }));
 
-    // Return the extracted videos with the additional data as JSON
-    return res.status(200).json({ videos });
+    // Return the videos data directly (without wrapping in a second array)
+    return res.status(200).json(videos);
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: 'Failed to fetch YouTube data' });
