@@ -26,7 +26,7 @@ module.exports = async (req, res) => {
       description: item.description,  // Description of the video
       publishDate: item.uploadDate,  // Upload date of the video
       duration: item.timestamp,  // Duration of the video (in seconds)
-      creatorId: item.creatorId || '',  // Channel ID
+      creatorId: item.author.channelId || '',
     }));
 
     // Return the videos data directly (without wrapping in a second array)
