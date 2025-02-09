@@ -1,4 +1,5 @@
-import axios from 'axios';
+const axios = require('axios');
+
 
 const API_KEY = process.env.YOUTUBE_API_KEY;
 const YT_API_URL = "https://www.googleapis.com/youtube/v3";
