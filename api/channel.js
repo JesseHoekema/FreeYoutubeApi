@@ -1,11 +1,10 @@
 const axios = require('axios');
 
-
 const API_KEY = process.env.YOUTUBE_API_KEY;
 const YT_API_URL = "https://www.googleapis.com/youtube/v3";
 
 // 🎥 Haalt kanaalinformatie op of alle video-ID’s van een kanaal
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   const { id, type } = req.query;
 
   if (!id) {
@@ -74,4 +73,4 @@ export default async function handler(req, res) {
   } catch (error) {
     return res.status(500).json({ error: 'An error occurred', details: error.message });
   }
-}
+};
