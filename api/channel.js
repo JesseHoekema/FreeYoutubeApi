@@ -3,84 +3,103 @@ const axios = require('axios');
 const API_KEY = process.env.YOUTUBE_API_KEY;
 const YT_API_URL = "https://www.googleapis.com/youtube/v3";
 
-module.exports = async function handler(req, res) {
-  const { id, type } = req.query;
+// 🎥 Get channel information from @username (handle)
+module.exports = async (req, res) => {
+  const { username, action } = req.query;
 
-  if (!id) {
-    console.error("Error: Channel ID is missing in the request");
-    return res.status(400).json({ error: 'Channel ID is required' });
+  if (!username) {
+    return res.status(400).json({ error: 'Username is required' });
   }
 
-  console.log(`Request received for Channel ID: ${id} with type: ${type}`);
+  let cleanUsername = username.startsWith('@') ? username.slice(1) : username;
 
   try {
-    if (type === 'videos') {
-      // Haal de uploads-playlist-ID op
-      const channelResponse = await axios.get(`${YT_API_URL}/channels`, {
-        params: { part: 'contentDetails', id, key: API_KEY },
-      });
-      
-      console.log(`Channel response: ${JSON.stringify(channelResponse.data)}`);
-      
-      const channel = channelResponse.data.items[0];
-      if (!channel) {
-        console.error(`Channel not found for ID: ${id}`);
-        return res.status(404).json({ error: 'Channel not found' });
-      }
+    // Use YouTube search API to resolve channel from handle
+    const searchUrl = `${YT_API_URL}/search?part=snippet&type=channel&q=${cleanUsername}&key=${API_KEY}`;
+    const searchResponse = await axios.get(searchUrl);
 
-      const uploadsPlaylistId = channel.contentDetails.relatedPlaylists.uploads;
-
-      let videoIds = [];
-      let nextPageToken = "";
-
-      do {
-        const videosResponse = await axios.get(`${YT_API_URL}/playlistItems`, {
-          params: {
-            part: 'contentDetails',
-            playlistId: uploadsPlaylistId,
-            maxResults: 50,
-            pageToken: nextPageToken,
-            key: API_KEY,
-          },
-        });
-
-        console.log(`Videos response: ${JSON.stringify(videosResponse.data)}`);
-
-        videoIds.push(...videosResponse.data.items.map(item => item.contentDetails.videoId));
-        nextPageToken = videosResponse.data.nextPageToken || null;
-      } while (nextPageToken);
-
-      return res.json({ channelId: id, videoIds });
-    }
-
-    // Haal kanaalgegevens op
-    const url = `${YT_API_URL}/channels?part=snippet,contentDetails,statistics&id=${id}&key=${API_KEY}`;
-    const response = await axios.get(url);
-    
-    console.log(`Channel data: ${JSON.stringify(response.data)}`);
-
-    const channel = response.data.items[0];
-    if (!channel) {
-      console.error(`Channel not found for ID: ${id}`);
+    if (!searchResponse.data.items || searchResponse.data.items.length === 0) {
       return res.status(404).json({ error: 'Channel not found' });
     }
 
-    const channelInfo = {
-      id: channel.id,
-      title: channel.snippet.title,
-      description: channel.snippet.description,
-      publishedAt: channel.snippet.publishedAt,
-      thumbnails: channel.snippet.thumbnails,
-      country: channel.snippet.country || "Unknown",
-      viewCount: channel.statistics.viewCount,
-      subscriberCount: channel.statistics.subscriberCount,
-      videoCount: channel.statistics.videoCount,
-      uploadsPlaylistId: channel.contentDetails.relatedPlaylists.uploads,
-    };
-
-    return res.json(channelInfo);
+    const channelId = searchResponse.data.items[0].snippet.channelId;
+    
+    if (action === 'videos') {
+      return getChannelVideos(res, channelId);
+    } else {
+      return getChannelInfo(res, channelId);
+    }
   } catch (error) {
-    console.error('Error occurred:', error);  // Log de volledige fout
-    return res.status(500).json({ error: 'An error occurred', details: error.message });
+    console.error(error);
+    res.status(500).json({ error: 'An error occurred', details: error.message });
   }
 };
+
+async function getChannelInfo(res, channelId) {
+  try {
+    const channelInfoUrl = `${YT_API_URL}/channels?part=snippet,contentDetails,statistics,brandingSettings&id=${channelId}&key=${API_KEY}`;
+    const channelInfoResponse = await axios.get(channelInfoUrl);
+
+    if (!channelInfoResponse.data.items || channelInfoResponse.data.items.length === 0) {
+      return res.status(404).json({ error: 'Detailed channel information not found' });
+    }
+
+    const channelInfo = channelInfoResponse.data.items[0];
+    res.json({
+      id: channelInfo.id,
+      title: channelInfo.snippet.title,
+      description: channelInfo.snippet.description,
+      publishedAt: channelInfo.snippet.publishedAt,
+      thumbnails: channelInfo.snippet.thumbnails,
+      country: channelInfo.snippet.country || "Unknown",
+      viewCount: channelInfo.statistics.viewCount,
+      subscriberCount: channelInfo.statistics.subscriberCount,
+      videoCount: channelInfo.statistics.videoCount,
+      uploadsPlaylistId: channelInfo.contentDetails.relatedPlaylists.uploads,
+      banner: channelInfo.brandingSettings.image?.bannerExternalUrl || 'https://via.placeholder.com/1200x200?text=No+Banner'
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to fetch channel info', details: error.message });
+  }
+}
+
+async function getChannelVideos(res, channelId) {
+  try {
+    const channelResponse = await axios.get(`${YT_API_URL}/channels`, {
+      params: { part: 'contentDetails', id: channelId, key: API_KEY },
+    });
+
+    if (!channelResponse.data.items || channelResponse.data.items.length === 0) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const uploadsPlaylistId = channelResponse.data.items[0].contentDetails.relatedPlaylists.uploads;
+    let videoIds = [];
+    let nextPageToken = "";
+
+    do {
+      const videosResponse = await axios.get(`${YT_API_URL}/playlistItems`, {
+        params: {
+          part: 'contentDetails',
+          playlistId: uploadsPlaylistId,
+          maxResults: 50,
+          pageToken: nextPageToken,
+          key: API_KEY,
+        },
+      });
+
+      if (!videosResponse.data.items || videosResponse.data.items.length === 0) {
+        break;
+      }
+
+      videoIds.push(...videosResponse.data.items.map(item => item.contentDetails.videoId));
+      nextPageToken = videosResponse.data.nextPageToken || null;
+    } while (nextPageToken);
+
+    res.json({ channelId, videoIds });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to fetch videos', details: error.message });
+  }
+}
